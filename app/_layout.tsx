@@ -1,52 +1,58 @@
 // app/_layout.tsx
-import { Slot, useRouter, useSegments } from "expo-router";
-import { AuthProvider, useAuth } from "../contexts/AuthContext";
-import { useEffect, useState } from "react";
-import * as SplashScreen from "expo-splash-screen";
-import { View, ActivityIndicator } from "react-native";
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 
-SplashScreen.preventAutoHideAsync(); // แสดง Splash จนกว่าเราจะสั่งให้ปิด
-
-function ProtectedRoute() {
-  const { user, loading } = useAuth();
+// สร้าง Component ย่อยเพื่อเช็คสถานะและ Redirect
+const RootLayoutNav = () => {
+  const { userToken, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
-    if (!loading) {
-      const publicRoutes = ["startscreen", "registerscreen", "loginscreen"];
-      const currentSegment = segments[0];
-      const inPublicRoute = publicRoutes.includes(currentSegment);
+    if (isLoading) return;
 
-      if (!user && !inPublicRoute) {
-        router.replace("/startscreen");
-      } else if (user && inPublicRoute) {
-        router.replace("/mainscreen");
-      }
+    const inAuthGroup = segments[0] === '(auth)'; // ถ้าคุณมีการจัดกลุ่ม (ในภาพยังไม่มี ไม่เป็นไร)
 
-      // ✅ แสดงหน้าหลัง redirect เสร็จ
-      setAppReady(true);
-      SplashScreen.hideAsync().catch(console.warn);
+    // ถ้าไม่มี Token และไม่ได้อยู่ในหน้า Login/Register/Start -> ดีดกลับไปหน้า Start
+    // หมายเหตุ: ปรับ logic ตรงนี้ตาม Flow ที่คุณต้องการ
+    if (!userToken) {
+        // เช็คว่าตอนนี้อยู่หน้าไหน ถ้าไม่ใช่หน้าพวกนี้ ให้เด้งไป startscreen
+        const currentRoute = segments[0]; 
+        if (currentRoute !== 'loginscreen' && currentRoute !== 'registerscreen' && currentRoute !== 'startscreen') {
+             router.replace('/startscreen'); 
+        }
+    } else {
+      // ถ้ามี Token แล้ว ให้เด้งไปหน้า Main
+       router.replace('/mainscreen');
     }
-  }, [user, segments, loading]);
+  }, [userToken, isLoading, segments]);
 
-  // ✅ แสดง loading จนกว่าจะ redirect เสร็จ
-  if (!appReady) {
+  if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
       </View>
     );
   }
 
-  return <Slot />;
-}
+  return (
+    <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="startscreen" options={{ headerShown: false }} />
+      <Stack.Screen name="loginscreen" options={{ headerShown: false }} />
+      <Stack.Screen name="registerscreen" options={{ headerShown: false }} />
+      <Stack.Screen name="mainscreen" options={{ headerShown: false }} /> 
+      {/* เพิ่มหน้าอื่นๆ ตามต้องการ */}
+    </Stack>
+  );
+};
 
-export default function Layout() {
+export default function RootLayout() {
   return (
     <AuthProvider>
-      <ProtectedRoute />
+      <RootLayoutNav />
     </AuthProvider>
   );
 }
