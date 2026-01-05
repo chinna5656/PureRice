@@ -5,15 +5,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from "expo-status-bar";
 import { useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    Dimensions,
-    Image,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Animated,
+  Dimensions,
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -30,7 +30,7 @@ const { width, height } = Dimensions.get("window");
 const isSmallScreen = width < 375;
 
 export default function HomeScreen() {
-  let cameraRef = useRef(null);
+  const cameraRef = useRef(null);
   const [photo, setPhoto] = useState(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -85,18 +85,29 @@ export default function HomeScreen() {
     );
   }
 
+  const runAnalysis = async (uri) => {
+    const result = await analysis(uri);
+
+    if (!result || typeof result.percentage !== "number") {
+      throw new Error("Invalid analysis result");
+    }
+
+    return result;
+  };
+
   const takePic = async () => {
-    if (!cameraRef.current) {
-      console.log("Camera reference is not available yet.");
+    if (!cameraRef.current?.takePictureAsync) {
+      Alert.alert("กล้องยังไม่พร้อม");
       return;
     }
+
 
     animateButton(async () => {
       let options = {
         quality: 0.8,
-        base64: true,
         exif: false,
       };
+
 
       try {
         let newPhoto = await cameraRef.current.takePictureAsync(options);
@@ -109,6 +120,8 @@ export default function HomeScreen() {
   };
 
   const pickAndUploadImage = async () => {
+    if (isAnalyzing) return;
+
     const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!granted) {
       Alert.alert("จำเป็นต้องขออนุญาต", "ต้องการเข้าถึงแกลเลอรี่เพื่อเลือกรูปภาพ");
@@ -125,11 +138,12 @@ export default function HomeScreen() {
     if (!result.canceled) {
       const selectedImageUri = result.assets[0].uri;
       setIsAnalyzing(true);
-      
+
       try {
-        const analysisResults = await analysis(selectedImageUri);
-        const analysisResult = Number(analysisResults);
-        
+        const result = await runAnalysis(selectedImageUri);
+        const analysisResult = result.percentage;
+        console.log("Analysis result:", analysisResult);
+
         if (typeof analysisResult === "number" && !isNaN(analysisResult)) {
           Alert.alert("ผลการวิเคราะห์", `คุณภาพการสี: ${analysisResult}%`, [
             {
@@ -153,8 +167,10 @@ export default function HomeScreen() {
     }
   };
 
+  //const handleAnalysis = async () => {
+    //if (!photo?.uri) return;
   const handleAnalysis = async () => {
-    if (!photo?.uri) return;
+    if (isAnalyzing || !photo?.uri) return;
 
     setIsAnalyzing(true);
     Animated.timing(fadeAnim, {
@@ -164,9 +180,10 @@ export default function HomeScreen() {
     }).start();
 
     try {
-      const result = await analysis(photo.uri);
-      const numericResult = Number(result);
-      
+      const result = await runAnalysis(photo.uri);
+      const numericResult = result.percentage;
+      console.log("Analysis result:", numericResult);
+
       if (!isNaN(numericResult)) {
         Alert.alert("ผลการวิเคราะห์", `คุณภาพการสี: ${numericResult}%`, [
           {
@@ -179,10 +196,10 @@ export default function HomeScreen() {
               });
             }
           },
-          { 
-            text: "ถ่ายใหม่", 
+          {
+            text: "ถ่ายใหม่",
             onPress: () => setPhoto(null),
-            style: "default" 
+            style: "default"
           }
         ]);
       } else {
@@ -219,7 +236,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
-      
+
       {/* Header */}
       <BlurView intensity={80} tint="light" style={styles.header}>
         <Text style={styles.headerTitle}>วิเคราะห์คุณภาพการสี</Text>
@@ -238,7 +255,7 @@ export default function HomeScreen() {
           ) : (
             <Image source={{ uri: photo.uri }} style={styles.camera} />
           )}
-          
+
           {/* Overlay Grid */}
           {!photo && (
             <View style={styles.gridOverlay}>
@@ -289,8 +306,8 @@ export default function HomeScreen() {
               onPress={pickAndUploadImage}
               disabled={isAnalyzing}
             >
-              <LinearGradient 
-                colors={isAnalyzing ? ['#ccc', '#aaa'] : ['#FF6B6B', '#FF5252']} 
+              <LinearGradient
+                colors={isAnalyzing ? ['#ccc', '#aaa'] : ['#FF6B6B', '#FF5252']}
                 style={styles.controlButtonGradient}
               >
                 {isAnalyzing ? (
@@ -314,8 +331,8 @@ export default function HomeScreen() {
               onPress={handleAnalysis}
               disabled={isAnalyzing}
             >
-              <LinearGradient 
-                colors={isAnalyzing ? ['#ccc', '#aaa'] : ['#4CAF50', '#45a049']} 
+              <LinearGradient
+                colors={isAnalyzing ? ['#ccc', '#aaa'] : ['#4CAF50', '#45a049']}
                 style={styles.analysisButtonGradient}
               >
                 {isAnalyzing ? (
