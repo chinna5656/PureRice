@@ -60,8 +60,9 @@ export default function RegisterScreen() {
         email: email.value,
         password: password.value,
       });
+
       console.log('API URL:', `${API_URL}/register`);
-      console.log('Form Data:', formData);
+      //console.log('Form Data:', formData);
 
       const response = await axios.post(`${API_URL}/register`, formData, {
         headers: {
