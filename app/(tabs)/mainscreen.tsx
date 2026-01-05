@@ -1,30 +1,30 @@
-import { StatusBar } from "expo-status-bar";
-import {
-  StyleSheet,
-  Text,
-  View,
-  Image,
-  Alert,
-  Dimensions,
-  TouchableOpacity,
-  SafeAreaView,
-  Animated,
-  Platform,
-} from "react-native";
-import { useEffect, useRef, useState } from "react";
+import { BlurView } from 'expo-blur';
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { StatusBar } from "expo-status-bar";
+import { useRef, useState } from "react";
+import {
+    Alert,
+    Animated,
+    Dimensions,
+    Image,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Icons
+import Ionicons from "@expo/vector-icons/Ionicons";
 import Octicons from "@expo/vector-icons/Octicons";
 import FontAwesome from "react-native-vector-icons/FontAwesome";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { router } from "expo-router";
-import analysis from "../components/analysis";
+import analysis from "../../src/components/analysis";
 
 const { width, height } = Dimensions.get("window");
 const isSmallScreen = width < 375;

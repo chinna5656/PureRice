@@ -1,4 +1,4 @@
-import { API_AI } from "@/services/api";
+import { API_AI } from "../services/api";
 
 const analysis = async (uri) => {
     try {

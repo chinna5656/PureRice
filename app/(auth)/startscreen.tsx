@@ -2,10 +2,10 @@ import React from "react";
 import { Button } from 'react-native-paper';
 import { router } from 'expo-router';
 
-import Background from "../components/Background";
-import Logo from "../components/Logo";
-import Header from "../components/Header";
-import Paragraph from "../components/Paragraph";
+import Background from "../../src/components/Background";
+import Logo from "../../src/components/Logo";
+import Header from "../../src/components/Header";
+import Paragraph from "../../src/components/Paragraph";
 
 export default function StartScreen( ) {
   return (

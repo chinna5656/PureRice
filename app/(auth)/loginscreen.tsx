@@ -1,35 +1,30 @@
-import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
   Alert,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
-  ImageBackground,
   ScrollView,
-  Dimensions,
+  StyleSheet,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Text } from "react-native-paper";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
-import { Button, TextInput, Card } from 'react-native-paper';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Button, Card, Text, TextInput } from "react-native-paper";
 
 // Components
-import Logo from "../components/Logo";
-import Header from "../components/Header";
-import Background from "@/components/Background";
-import { useAuth } from "../contexts/AuthContext";
+import Header from "../../src/components/Header";
+import Logo from "../../src/components/Logo";
 
 // Utils
-import { theme } from "../core/theme";
-import { emailValidator } from "../helpers/emailValidator";
-import { passwordValidator } from "../helpers/passwordValidator";
-import { API_URL } from "../services/api";
+import { theme } from "../../src/core/theme";
+import { emailValidator } from "../../src/helpers/emailValidator";
+import { passwordValidator } from "../../src/helpers/passwordValidator";
+import { useAuth } from "../../src/hooks/useAuth";
+import { API_URL } from "../../src/services/api";
+import { getLoggedIn, getToken, saveLoggedIn, saveToken } from "../../src/services/storage/secureStore";
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,16 +33,17 @@ export default function LoginScreen() {
   const { login } = useAuth();
 
   const [email, setEmail] = useState({ value: "", error: "" });
-  const [password, setPassword] = useState({ value: "", error: "" });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState({ value: "", error: "" });
+  const [username, setUsername] = useState("");
 
   // Auto-login check
   useEffect(() => {
     const checkToken = async () => {
       try {
-        const token = await AsyncStorage.getItem("token");
-        const isLoggedIn = await AsyncStorage.getItem("isLoggedIn");
+        const token = await getToken();
+        const isLoggedIn = await getLoggedIn();
         if (token && isLoggedIn === "true") {
           router.replace("/mainscreen");
         }
@@ -91,6 +87,39 @@ export default function LoginScreen() {
     }
   };
 
+  const handleLogin = async () => {
+    try {
+      const passwordError = passwordValidator(password.value);
+      if (passwordError) {
+        setPassword({ ...password, error: passwordError });
+        return;
+      }
+
+      // API /token ต้องการ Form Data (OAuth2 Standard)
+      const formData = new FormData();
+      formData.append('username', username);
+      formData.append('password', password.value);
+
+      const response = await axios.post(`${API_URL}/token`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const token = response.data.access_token;
+      
+      // เก็บ Token ลงเครื่อง
+      await saveToken(token);
+      await saveLoggedIn("true");
+      
+      Alert.alert("สำเร็จ", "เข้าสู่ระบบเรียบร้อย");
+      
+      // ไปหน้า Home (AI) และล้างประวัติการย้อนกลับมาหน้า Login
+      router.replace("/mainscreen");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("ผิดพลาด", "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+    }
+  };
+  
   return (
     
       <LinearGradient
@@ -114,8 +143,22 @@ export default function LoginScreen() {
             </View>
 
             {/* Login Form */}
-            <Card style={styles.loginCard} elevation={8}>
+            <Card style={styles.loginCard} elevation={4}>
               <Card.Content style={styles.cardContent}>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    label="ชื่อผู้ใช้"
+                    mode="outlined"
+                    value={username}
+                    onChangeText={(text) => setUsername(text)}
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                    left={<TextInput.Icon icon="account" />}
+                    style={styles.textInput}
+                    theme={{ colors: { primary: theme.colors.primary } }}
+                  />
+                </View>
+                
                 <View style={styles.inputContainer}>
                   <TextInput
                     label="อีเมล"
@@ -144,7 +187,7 @@ export default function LoginScreen() {
                     error={!!password.error}
                     secureTextEntry={!showPassword}
                     returnKeyType="done"
-                    onSubmitEditing={onLoginPressed}
+                    onSubmitEditing={handleLogin}
                     left={<TextInput.Icon icon="lock" />}
                     right={
                       <TextInput.Icon
@@ -168,7 +211,7 @@ export default function LoginScreen() {
                 {/* Login Button */}
                 <Button
                   mode="contained"
-                  onPress={onLoginPressed}
+                  onPress={handleLogin}
                   disabled={loading}
                   style={styles.loginButton}
                   contentStyle={styles.loginButtonContent}

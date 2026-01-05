@@ -1,58 +1,86 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Alert, 
-  KeyboardAvoidingView, 
-  Platform,
-  ActivityIndicator,
-  TouchableWithoutFeedback,
-  Keyboard
-} from 'react-native';
+import axios from 'axios';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
+} from 'react-native';
+import { API_URL } from '../../src/services/api';
 
 // Import Validators
-import { emailValidator } from '../helpers/emailValidator';
-import { passwordValidator } from '../helpers/passwordValidator';
-import { nameValidator } from '../helpers/nameValidator';
+import { emailValidator } from '../../src/helpers/emailValidator';
+import { nameValidator } from '../../src/helpers/nameValidator';
+import { passwordValidator } from '../../src/helpers/passwordValidator';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signUp } = useAuth(); // ดึงฟังก์ชัน signUp
+  //const { signUp } = useAuth(); // ดึงฟังก์ชัน signUp
 
   const [name, setName] = useState({ value: '', error: '' });
+  const [username, setUsername] = useState({ value: '', error: '' });
   const [email, setEmail] = useState({ value: '', error: '' });
   const [password, setPassword] = useState({ value: '', error: '' });
   const [loading, setLoading] = useState(false);
 
   const onSignUpPressed = async () => {
     const nameError = nameValidator(name.value);
+    const usernameError = nameValidator(username.value);
     const emailError = emailValidator(email.value);
     const passwordError = passwordValidator(password.value);
 
     if (emailError || passwordError || nameError) {
       setName({ ...name, error: nameError });
+      setUsername({ ...username, error: usernameError });
       setEmail({ ...email, error: emailError });
       setPassword({ ...password, error: passwordError });
       return;
     }
 
     setLoading(true);
-    // ส่งข้อมูลไปสมัครสมาชิก (API Backend ต้องรองรับ field 'name' ด้วยถ้าจะส่งไป)
-    // ในตัวอย่าง Backend ก่อนหน้าเรารับแค่ email, password
-    const isSuccess = await signUp(email.value, password.value); 
-    setLoading(false);
 
-    if (isSuccess) {
-      Alert.alert('Success', 'Account created successfully!', [
-        { text: 'OK', onPress: () => router.replace('/loginscreen') }
-      ]);
-    } else {
-      Alert.alert('Registration Failed', 'Email might already be in use.');  // ข้อความแสดงข้อผิดพลาดทั่วไป
+    try {
+      const formData = new FormData();
+      formData.append('name', name.value);
+      formData.append('username', username.value);
+      formData.append('email', email.value);
+      formData.append('password', password.value);
+
+      console.log('Registering with data:', {
+        name: name.value,
+        username: username.value,
+        email: email.value,
+        password: password.value,
+      });
+      console.log('API URL:', `${API_URL}/register`);
+      console.log('Form Data:', formData);
+
+      const response = await axios.post(`${API_URL}/register`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.status === 'ok') {
+        Alert.alert('Success', 'Account created successfully!', [
+          { text: 'OK', onPress: () => router.replace('/loginscreen') }
+        ]);
+      } else {
+        Alert.alert('Registration Failed', response.data.message || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      Alert.alert('Registration Failed', 'Email might already be in use or server error.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -74,6 +102,16 @@ export default function RegisterScreen() {
               onChangeText={(text) => setName({ value: text, error: '' })}
             />
             {name.error ? <Text style={styles.errorText}>{name.error}</Text> : null}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              value={username.value}
+              onChangeText={(text) => setUsername({ value: text, error: '' })}
+            />
+            {username.error ? <Text style={styles.errorText}>{username.error}</Text> : null}
           </View>
 
           {/* Email Input */}
