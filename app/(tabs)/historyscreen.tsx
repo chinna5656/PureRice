@@ -1,27 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, TextInput, FlatList, Alert } from 'react-native';
-import { Text, Button, Card } from 'react-native-paper';
+import { View, StyleSheet, FlatList, Alert, StatusBar, TouchableOpacity } from 'react-native';
+import { Text, Surface, IconButton } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native'; // เพิ่ม useNavigation
 import { useLocalSearchParams } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const STORAGE_KEY = 'rice_data';
 const MAX_ITEMS = 100;
 
 export default function HistoryScreen() {
   const [tonkhaoList, setTonkhaoList] = useState([]);
-  const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { newData } = useLocalSearchParams();
+  const navigation = useNavigation(); // สร้างตัวแปร navigation
 
-  // โหลดข้อมูลเมื่อหน้าจอถูกโฟกัส
   useFocusEffect(
     useCallback(() => {
       loadTonkhaoList();
     }, [])
   );
 
-  // จัดการกับข้อมูลใหม่ที่ส่งมาจากหน้าอื่น
   useEffect(() => {
     if (newData !== undefined) {
       const incomingTonkhao = parseFloat(newData);
@@ -29,7 +28,6 @@ export default function HistoryScreen() {
         handleAddFromOtherScreen(incomingTonkhao);
       }
     }
-    loadTonkhaoList();
   }, [newData]);
 
   const loadTonkhaoList = async () => {
@@ -40,8 +38,7 @@ export default function HistoryScreen() {
         setTonkhaoList(JSON.parse(value));
       }
     } catch (e) {
-      console.error('Failed to load tonkhao list.', e);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลต้นข้าวได้');
+      console.error('Failed to load', e);
     } finally {
       setIsLoading(false);
     }
@@ -51,194 +48,118 @@ export default function HistoryScreen() {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list));
       return true;
-    } catch (e) {
-      console.error('Failed to save tonkhao list.', e);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลต้นข้าวได้');
-      return false;
-    }
+    } catch (e) { return false; }
   };
 
-  // ฟังก์ชันสำหรับรับข้อมูลจากหน้าอื่น
   const handleAddFromOtherScreen = async (value) => {
-    try {
-      // โหลดข้อมูลล่าสุดจาก AsyncStorage เพื่อป้องกันการสูญหายของข้อมูล
-      const storedData = await AsyncStorage.getItem(STORAGE_KEY);
-      let currentList = [];
-      if (storedData !== null) {
-        currentList = JSON.parse(storedData);
-      }
-
-      const newItem = {
-        id: Date.now().toString(),
-        value: parseFloat(value),
-        timestamp: new Date().toLocaleString('th-TH'),
-        source: 'external' // เพิ่ม flag เพื่อระบุที่มาของข้อมูล
-      };
-
-      // เพิ่มข้อมูลใหม่และจำกัดจำนวนรายการ
-      const newList = [newItem, ...currentList].slice(0, MAX_ITEMS);
-      await saveTonkhaoList(newList);
-      setTonkhaoList(newList);
-    } catch (e) {
-      console.error('Error adding tonkhao from other screen:', e);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเพิ่มข้อมูลต้นข้าวได้');
-    }
-  };
-
-  // ฟังก์ชันสำหรับการเพิ่มข้อมูลด้วยตนเอง
-  const addTonkhaoManual = async (value) => {
-    try {
-      // โหลดข้อมูลล่าสุดจาก AsyncStorage ก่อนเพิ่มข้อมูลใหม่
-      const storedData = await AsyncStorage.getItem(STORAGE_KEY);
-      let currentList = [];
-      if (storedData !== null) {
-        currentList = JSON.parse(storedData);
-      }
-
-      const newItem = {
-        id: Date.now().toString(),
-        value: parseFloat(value),
-        timestamp: new Date().toLocaleString('th-TH'),
-        source: 'manual' // เพิ่ม flag เพื่อระบุที่มาของข้อมูล
-      };
-
-      // เพิ่มข้อมูลใหม่และจำกัดจำนวนรายการ
-      const newList = [newItem, ...currentList].slice(0, MAX_ITEMS);
-      const saveSuccess = await saveTonkhaoList(newList);
-      if (saveSuccess) {
-        setTonkhaoList(newList);
-        return true;
-      }
-      return false;
-    } catch (e) {
-      console.error('Error adding tonkhao manually:', e);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเพิ่มข้อมูลต้นข้าวได้');
-      return false;
-    }
-  };
-
-  const handleAddManual = async () => {
-    const trimmedValue = inputValue.trim();
-    if (!trimmedValue) {
-      Alert.alert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกตัวเลข');
-      return;
-    }
-
-    const number = parseFloat(trimmedValue);
-    if (isNaN(number) || number < 0 || number > 100) {
-      Alert.alert('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกตัวเลขระหว่าง 0 ถึง 100');
-      return;
-    }
-
-    const success = await addTonkhaoManual(number);
-    if (success) {
-      setInputValue('');
-      Alert.alert('สำเร็จ', 'บันทึกต้นข้าว% เรียบร้อยแล้ว');
-    }
-  };
-
-  const deleteItem = async (id) => {
-    try {
-      // โหลดข้อมูลล่าสุดจาก AsyncStorage ก่อนลบ
-      const storedData = await AsyncStorage.getItem(STORAGE_KEY);
-      let currentList = [];
-      if (storedData !== null) {
-        currentList = JSON.parse(storedData);
-      }
-
-      const newList = currentList.filter(item => item.id !== id);
-      const saveSuccess = await saveTonkhaoList(newList);
-      if (saveSuccess) {
-        setTonkhaoList(newList);
-        Alert.alert('สำเร็จ', 'ลบรายการเรียบร้อยแล้ว');
-      }
-    } catch (e) {
-      console.error('Error deleting item:', e);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถลบรายการได้');
-    }
+    const storedData = await AsyncStorage.getItem(STORAGE_KEY);
+    let currentList = storedData ? JSON.parse(storedData) : [];
+    const newItem = {
+      id: Date.now().toString(),
+      value: parseFloat(value),
+      timestamp: new Date().toLocaleString('th-TH', { 
+        day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' 
+      }),
+    };
+    const newList = [newItem, ...currentList].slice(0, MAX_ITEMS);
+    await saveTonkhaoList(newList);
+    setTonkhaoList(newList);
   };
 
   const confirmDeleteItem = (id) => {
-    Alert.alert(
-      'ยืนยันการลบ',
-      'คุณต้องการลบรายการนี้ใช่หรือไม่?',
-      [
-        { text: 'ยกเลิก' },
-        { text: 'ลบ', onPress: () => deleteItem(id), style: 'destructive' }
-      ]
-    );
+    Alert.alert('ยืนยันการลบ', 'คุณต้องการลบรายการนี้ใช่หรือไม่?', [
+      { text: 'ยกเลิก', style: 'cancel' },
+      { text: 'ลบ', onPress: () => deleteItem(id), style: 'destructive' }
+    ]);
+  };
+
+  const deleteItem = async (id) => {
+    const newList = tonkhaoList.filter(item => item.id !== id);
+    await saveTonkhaoList(newList);
+    setTonkhaoList(newList);
   };
 
   const clearAll = async () => {
-    Alert.alert(
-      'ลบข้อมูลทั้งหมด', 
-      'คุณต้องการลบข้อมูลทั้งหมดหรือไม่?', 
-      [
-        { text: 'ยกเลิก' },
-        {
-          text: 'ลบทั้งหมด',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem(STORAGE_KEY);
-              setTonkhaoList([]);
-              Alert.alert('สำเร็จ', 'ลบข้อมูลทั้งหมดเรียบร้อยแล้ว');
-            } catch (e) {
-              console.error('Failed to delete all:', e);
-              Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถลบข้อมูลทั้งหมดได้');
-            }
-          },
-          style: 'destructive',
-        },
-      ]
-    );
+    Alert.alert('ล้างประวัติ', 'ต้องการลบข้อมูลทั้งหมดหรือไม่?', [
+      { text: 'ยกเลิก' },
+      { text: 'ลบทั้งหมด', onPress: async () => {
+          await AsyncStorage.removeItem(STORAGE_KEY);
+          setTonkhaoList([]);
+        }, style: 'destructive' 
+      }
+    ]);
+  };
+
+  const calculateAverage = () => {
+    if (tonkhaoList.length === 0) return '0.0';
+    const sum = tonkhaoList.reduce((acc, item) => acc + item.value, 0);
+    return (sum / tonkhaoList.length).toFixed(1);
   };
 
   const renderItem = ({ item }) => (
-    <Card style={styles.card}>
-      <Card.Content>
-        <Text style={styles.valueText}>🌾 คุณภาพการสี: {item.value.toFixed(2)}%</Text>
-        <Text style={styles.timestamp}>🕓 บันทึกเมื่อ: {item.timestamp}</Text>
-      </Card.Content>
-    </Card>
-  );
-
-  const calculateAverage = () => {
-    if (tonkhaoList.length === 0) return '0.00';
-    const sum = tonkhaoList.reduce((acc, item) => acc + parseFloat(item.value), 0);
-    return (sum / tonkhaoList.length).toFixed(2);
-  };
-
-  const average = calculateAverage();
-
-  const emptyListComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyText}>ยังไม่มีข้อมูล</Text>
-    </View>
+    <Surface style={styles.itemCard} elevation={1}>
+      <View style={styles.iconCircle}>
+        <MaterialCommunityIcons name="rice" size={22} color="#4caf50" />
+      </View>
+      <View style={styles.itemInfo}>
+        <Text style={styles.itemLabel}>คุณภาพการสี</Text>
+        <Text style={styles.itemTimestamp}>{item.timestamp}</Text>
+      </View>
+      <View style={styles.itemValueContainer}>
+        <Text style={styles.itemValueText}>{item.value.toFixed(1)}%</Text>
+        <TouchableOpacity hitSlop={{top: 10, bottom: 10, left: 10, right: 10}} onPress={() => confirmDeleteItem(item.id)}>
+          <MaterialCommunityIcons name="trash-can-outline" size={18} color="#ff5252" />
+        </TouchableOpacity>
+      </View>
+    </Surface>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🌾 ประวัติคุณภาพการสี </Text>
-      <Text style={styles.averageText}> ค่าเฉลี่ยคุณภาพการสี: {average}%</Text>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Top Navigation Bar */}
+      <View style={styles.topBar}>
+        <IconButton 
+          icon="chevron-left" 
+          size={30} 
+          onPress={() => navigation.goBack()} 
+          style={styles.backButton}
+        />
+        <IconButton 
+          icon="delete-outline" 
+          iconColor="#ff5252" 
+          onPress={clearAll} 
+          disabled={tonkhaoList.length === 0} 
+        />
+      </View>
 
-      <Button
-        mode="contained"
-        onPress={clearAll}
-        style={[styles.button, { backgroundColor: '#d32f2f' }]}
-        icon="delete-sweep"
-        disabled={tonkhaoList.length === 0 || isLoading}
-      >
-        ลบข้อมูลทั้งหมด
-      </Button>
+      <Text style={styles.headerTitle}>ประวัติการตรวจสอบ</Text>
+
+      {/* Summary Card */}
+      <Surface style={styles.summaryCard} elevation={3}>
+        <View>
+          <Text style={styles.summaryLabel}>ค่าเฉลี่ยคุณภาพการสี</Text>
+          <Text style={styles.summaryValue}>{calculateAverage()}<Text style={{fontSize: 20}}> %</Text></Text>
+        </View>
+        <View style={styles.summaryBadge}>
+            <Text style={styles.summaryCount}>{tonkhaoList.length} รายการ</Text>
+        </View>
+      </Surface>
 
       <FlatList
         data={tonkhaoList}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
-        ListEmptyComponent={emptyListComponent}
-        refreshing={isLoading}
-        onRefresh={loadTonkhaoList}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={<Text style={styles.sectionTitle}>รายการทั้งหมด</Text>}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="clipboard-text-outline" size={60} color="#e0e0e0" />
+            <Text style={styles.emptyText}>ไม่พบประวัติข้อมูล</Text>
+          </View>
+        }
       />
     </View>
   );
@@ -247,82 +168,111 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#FBFBFB',
+    paddingHorizontal: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 16,
-    color: '#4caf50',
-  },
-  inputContainer: {
+  topBar: {
     flexDirection: 'row',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 50,
+    marginHorizontal: -10,
   },
-  input: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 18,
-    borderRadius: 8,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    marginRight: 8,
+  backButton: {
+    marginLeft: -5,
   },
-  addButton: {
-    justifyContent: 'center',
-    backgroundColor: '#4caf50',
-  },
-  button: {
-    marginVertical: 8,
-  },
-  card: {
-    marginVertical: 8,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-  },
-  valueText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  timestamp: {
-    marginTop: 4,
-    fontSize: 12,
-    color: 'gray',
-  },
-  deleteButton: {
-    marginTop: 8,
-    borderColor: '#d32f2f',
-  },
-  averageText: {
-    fontSize: 18,
-    marginTop: 8,
-    marginBottom: 16,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#4caf50',
+    color: '#1A1C1E',
+    marginBottom: 20,
+  },
+  summaryCard: {
+    backgroundColor: '#4caf50',
+    padding: 24,
+    borderRadius: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 25,
+  },
+  summaryLabel: {
+    color: '#E8F5E9',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  summaryValue: {
+    color: '#fff',
+    fontSize: 38,
+    fontWeight: 'bold',
+  },
+  summaryBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  summaryCount: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#49454F',
+    marginBottom: 10,
+    marginTop: 5,
   },
   listContainer: {
-    flexGrow: 1,
-    paddingBottom: 16,
+    paddingBottom: 30,
   },
-  emptyContainer: {
-    flex: 1,
+  itemCard: {
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  iconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F1F8E9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 40,
+  },
+  itemInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  itemLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1C1E',
+  },
+  itemTimestamp: {
+    fontSize: 11,
+    color: '#909090',
+  },
+  itemValueContainer: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  itemValueText: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 2,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 80,
   },
   emptyText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontSize: 15,
+    color: '#BDBDBD',
+    marginTop: 10,
   },
 });

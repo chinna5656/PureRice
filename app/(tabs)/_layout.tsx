@@ -18,6 +18,7 @@ export default function AppLayout() {
     <Stack >
       <Stack.Screen name="mainscreen" options={{ headerShown: false }} />
       <Stack.Screen name="profilescreen" options={{ headerShown: false }} />
+      <Stack.Screen name="historyscreen" options={{ headerShown: false }} />
     </Stack>
   );
 }
