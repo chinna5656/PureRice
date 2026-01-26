@@ -3,11 +3,12 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from "expo-status-bar";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
   Dimensions,
+  Easing,
   Image,
   Platform,
   StyleSheet,
@@ -19,25 +20,56 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Icons
 import Ionicons from "@expo/vector-icons/Ionicons";
-import Octicons from "@expo/vector-icons/Octicons";
-import FontAwesome from "react-native-vector-icons/FontAwesome";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { router } from "expo-router";
 import analysis from "../../src/components/analysis";
 
 const { width, height } = Dimensions.get("window");
-const isSmallScreen = width < 375;
+const CAMERA_SIZE = Math.min(width - 40, height * 0.55);
 
 export default function HomeScreen() {
   const cameraRef = useRef(null);
   const [photo, setPhoto] = useState(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Animation Refs
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scanLineAnim = useRef(new Animated.Value(0)).current;
 
-  // Animation effects
+  // Scanning Animation Loop
+  useEffect(() => {
+    if (!photo) {
+      const scanAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanLineAnim, {
+            toValue: 1,
+            duration: 2000,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scanLineAnim, {
+            toValue: 0,
+            duration: 2000,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      scanAnimation.start();
+      return () => scanAnimation.stop();
+    }
+  }, [photo]);
+
+  const scanTranslateY = scanLineAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, CAMERA_SIZE],
+  });
+
+  // Button Press Animation
   const animateButton = (callback) => {
     Animated.sequence([
       Animated.timing(scaleAnim, {
@@ -55,28 +87,29 @@ export default function HomeScreen() {
 
   if (!permission) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <LinearGradient colors={['#667eea', '#764ba2']} style={styles.loadingGradient}>
-          <MaterialIcons name="camera" size={60} color="#fff" />
-          <Text style={styles.loadingText}>กำลังโหลด...</Text>
-        </LinearGradient>
-      </SafeAreaView>
+      <View style={styles.centerContainer}>
+         <StatusBar style="light" />
+         <Text style={styles.loadingText}>กำลังโหลด...</Text>
+      </View>
     );
   }
 
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
-        <LinearGradient colors={['#667eea', '#764ba2']} style={styles.permissionGradient}>
+        <StatusBar style="light" />
+        <LinearGradient colors={['#1a1a1a', '#2d3436']} style={styles.permissionGradient}>
           <View style={styles.permissionContent}>
-            <MaterialIcons name="camera-alt" size={80} color="#fff" style={styles.permissionIcon} />
-            <Text style={styles.permissionTitle}>ต้องการเข้าถึงกล้อง</Text>
+            <View style={styles.iconCircle}>
+              <MaterialIcons name="camera-alt" size={60} color="#fff" />
+            </View>
+            <Text style={styles.permissionTitle}>อนุญาตการใช้กล้อง</Text>
             <Text style={styles.permissionMessage}>
-              แอปนี้ต้องการเข้าถึงกล้องเพื่อถ่ายภาพและวิเคราะห์คุณภาพการสี
+              แอปพลิเคชันต้องการเข้าถึงกล้องเพื่อทำการวิเคราะห์คุณภาพสีจากภาพถ่ายของคุณ
             </Text>
-            <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-              <LinearGradient colors={['#4CAF50', '#45a049']} style={styles.permissionButtonGradient}>
-                <Text style={styles.permissionButtonText}>อนุญาต</Text>
+            <TouchableOpacity activeOpacity={0.8} onPress={requestPermission}>
+              <LinearGradient colors={['#667eea', '#764ba2']} style={styles.permissionButton}>
+                <Text style={styles.permissionButtonText}>อนุญาตการเข้าถึง</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -87,34 +120,23 @@ export default function HomeScreen() {
 
   const runAnalysis = async (uri) => {
     const result = await analysis(uri);
-
     if (!result || typeof result.percentage !== "number") {
       throw new Error("Invalid analysis result");
     }
-
     return result;
   };
 
   const takePic = async () => {
-    if (!cameraRef.current?.takePictureAsync) {
-      Alert.alert("กล้องยังไม่พร้อม");
-      return;
-    }
-
+    if (!cameraRef.current?.takePictureAsync) return;
 
     animateButton(async () => {
-      let options = {
-        quality: 0.8,
-        exif: false,
-      };
-
-
       try {
+        let options = { quality: 0.8, exif: false };
         let newPhoto = await cameraRef.current.takePictureAsync(options);
         setPhoto(newPhoto);
       } catch (error) {
         console.error("Error taking picture:", error);
-        Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถถ่ายภาพได้");
+        Alert.alert("ผิดพลาด", "ไม่สามารถถ่ายภาพได้");
       }
     });
   };
@@ -124,7 +146,7 @@ export default function HomeScreen() {
 
     const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!granted) {
-      Alert.alert("จำเป็นต้องขออนุญาต", "ต้องการเข้าถึงแกลเลอรี่เพื่อเลือกรูปภาพ");
+      Alert.alert("แจ้งเตือน", "ต้องการสิทธิ์เข้าถึงอัลบั้มรูปภาพ");
       return;
     }
 
@@ -141,249 +163,244 @@ export default function HomeScreen() {
 
       try {
         const result = await runAnalysis(selectedImageUri);
-        const analysisResult = result.percentage;
-        console.log("Analysis result:", analysisResult);
-
-        if (typeof analysisResult === "number" && !isNaN(analysisResult)) {
-          Alert.alert("ผลการวิเคราะห์", `คุณภาพการสี: ${analysisResult}%`, [
-            {
-              text: "ดูประวัติ",
-              onPress: () => router.push({
-                pathname: "/historyscreen",
-                params: { newData: analysisResult.toString() },
-              })
-            },
-            { text: "ตกลง", style: "default" }
-          ]);
-        } else {
-          Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถวิเคราะห์รูปภาพได้ กรุณาลองใหม่");
-        }
+        showAnalysisResult(result.percentage);
       } catch (error) {
-        console.error("Error analyzing image:", error);
-        Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถวิเคราะห์รูปภาพได้");
+        Alert.alert("ผิดพลาด", "ไม่สามารถวิเคราะห์รูปภาพได้");
       } finally {
         setIsAnalyzing(false);
       }
     }
   };
 
-  //const handleAnalysis = async () => {
-    //if (!photo?.uri) return;
   const handleAnalysis = async () => {
     if (isAnalyzing || !photo?.uri) return;
 
     setIsAnalyzing(true);
-    Animated.timing(fadeAnim, {
-      toValue: 0.5,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-
+    
     try {
       const result = await runAnalysis(photo.uri);
-      const numericResult = result.percentage;
-      console.log("Analysis result:", numericResult);
-
-      if (!isNaN(numericResult)) {
-        Alert.alert("ผลการวิเคราะห์", `คุณภาพการสี: ${numericResult}%`, [
-          {
-            text: "ดูประวัติ",
-            onPress: () => {
-              setPhoto(null);
-              router.push({
-                pathname: "/historyscreen",
-                params: { newData: numericResult.toString() },
-              });
-            }
-          },
-          {
-            text: "ถ่ายใหม่",
-            onPress: () => setPhoto(null),
-            style: "default"
-          }
-        ]);
-      } else {
-        Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถวิเคราะห์รูปภาพได้ กรุณาลองใหม่");
-      }
+      showAnalysisResult(result.percentage);
     } catch (error) {
-      console.error("Error analyzing photo:", error);
-      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถวิเคราะห์รูปภาพได้");
+      Alert.alert("ผิดพลาด", "ไม่สามารถวิเคราะห์รูปภาพได้");
     } finally {
       setIsAnalyzing(false);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+    }
+  };
+
+  const showAnalysisResult = (percentage) => {
+    if (!isNaN(percentage)) {
+      Alert.alert("ผลการวิเคราะห์", `คุณภาพสี: ${percentage}%`, [
+        {
+          text: "ดูประวัติ",
+          onPress: () => {
+            setPhoto(null);
+            router.push({
+              pathname: "/historyscreen",
+              params: { newData: percentage.toString() },
+            });
+          }
+        },
+        {
+          text: "ปิด",
+          style: "cancel",
+          onPress: () => {} 
+        }
+      ]);
+    } else {
+      Alert.alert("ผิดพลาด", "ผลการวิเคราะห์ไม่ถูกต้อง");
     }
   };
 
   const retakePhoto = () => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setPhoto(null);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    });
+    setPhoto(null);
+  };
+
+  // Handler สำหรับปุ่ม Profile
+  const handleProfilePress = () => {
+    // นำทางไปหน้า Profile (ตรวจสอบว่า path นี้มีอยู่จริง หรือเปลี่ยนเป็น path ที่ถูกต้อง)
+    router.push("/profilescreen"); 
+    // หรือถ้ายังไม่มีหน้า Profile ให้ใช้ Alert ชั่วคราว:
+    // Alert.alert("Profile", "Coming soon...");
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
       <StatusBar style="light" />
+      
+      {/* Background Gradient */}
+      <LinearGradient
+        colors={['#0f0c29', '#302b63', '#24243e']}
+        style={StyleSheet.absoluteFillObject}
+      />
 
-      {/* Header */}
-      <BlurView intensity={80} tint="light" style={styles.header}>
-        <Text style={styles.headerTitle}>วิเคราะห์คุณภาพการสี</Text>
-        <Text style={styles.headerSubtitle}>ถ่ายภาพหรือเลือกจากแกลเลอรี่</Text>
-      </BlurView>
-
-      {/* Camera Container */}
-      <View style={styles.cameraWrapper}>
-        <Animated.View style={[styles.cameraContainer, { opacity: fadeAnim }]}>
-          {!photo ? (
-            <CameraView
-              style={styles.camera}
-              ref={cameraRef}
-              ratio="1:1"
-            />
-          ) : (
-            <Image source={{ uri: photo.uri }} style={styles.camera} />
-          )}
-
-          {/* Overlay Grid */}
-          {!photo && (
-            <View style={styles.gridOverlay}>
-              <View style={styles.gridLine} />
-              <View style={[styles.gridLine, styles.gridLineVertical]} />
-            </View>
-          )}
-        </Animated.View>
-
-        {/* Focus indicator */}
-        {!photo && (
-          <View style={styles.focusIndicator}>
-            <View style={styles.focusCorner} />
-            <View style={[styles.focusCorner, styles.focusCornerTopRight]} />
-            <View style={[styles.focusCorner, styles.focusCornerBottomLeft]} />
-            <View style={[styles.focusCorner, styles.focusCornerBottomRight]} />
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header - UPDATED */}
+        <View style={styles.header}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>AI Color Analysis</Text>
+            <Text style={styles.headerSubtitle}>ถ่ายภาพเพื่อวิเคราะห์คุณภาพ</Text>
           </View>
-        )}
-      </View>
 
-      {/* Controls */}
-      <BlurView intensity={80} tint="light" style={styles.controls}>
-        {!photo ? (
-          <>
-            {/* History Button */}
-            <TouchableOpacity
-              style={styles.controlButton}
-              onPress={() => router.push("/historyscreen")}
+          {/* New Profile Button */}
+          <TouchableOpacity 
+            style={styles.profileButton} 
+            onPress={handleProfilePress}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
+              style={styles.profileGradient}
             >
-              <LinearGradient colors={['#667eea', '#764ba2']} style={styles.controlButtonGradient}>
-                <MaterialIcons name="history" size={24} color="#fff" />
-              </LinearGradient>
-              <Text style={styles.controlButtonText}>ประวัติ</Text>
-            </TouchableOpacity>
+              <Ionicons name="person" size={20} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
-            {/* Camera Button */}
-            <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-              <TouchableOpacity style={styles.captureButton} onPress={takePic}>
-                <LinearGradient colors={['#4CAF50', '#45a049']} style={styles.captureButtonGradient}>
-                  <FontAwesome name="camera" size={32} color="#fff" />
+        {/* Main Content (Camera Area) */}
+        <View style={styles.contentContainer}>
+          <View style={styles.cameraFrame}>
+            <Animated.View style={[styles.cameraWrapper, { opacity: fadeAnim }]}>
+              {!photo ? (
+                <CameraView
+                  style={styles.camera}
+                  ref={cameraRef}
+                  ratio="1:1"
+                />
+              ) : (
+                <Image source={{ uri: photo.uri }} style={styles.camera} />
+              )}
+
+              {/* Scanning Effect Overlay */}
+              {!photo && !isAnalyzing && (
+                <View style={StyleSheet.absoluteFill}>
+                   {/* Corner Brackets */}
+                   <View style={[styles.corner, styles.tl]} />
+                   <View style={[styles.corner, styles.tr]} />
+                   <View style={[styles.corner, styles.bl]} />
+                   <View style={[styles.corner, styles.br]} />
+                   
+                   {/* Scanning Line */}
+                   <Animated.View 
+                     style={[
+                       styles.scanLine, 
+                       { transform: [{ translateY: scanTranslateY }] }
+                     ]} 
+                   >
+                     <LinearGradient
+                        colors={['rgba(0,255,150,0)', 'rgba(0,255,150,0.8)', 'rgba(0,255,150,0)']}
+                        start={{x: 0, y: 0}}
+                        end={{x: 1, y: 0}}
+                        style={{flex:1}}
+                     />
+                   </Animated.View>
+                </View>
+              )}
+            </Animated.View>
+          </View>
+        </View>
+
+        {/* Bottom Controls */}
+        <BlurView intensity={30} tint="dark" style={styles.bottomSheet}>
+          {!photo ? (
+            <View style={styles.controlsRow}>
+              {/* History */}
+              <TouchableOpacity 
+                style={styles.sideButton} 
+                onPress={() => router.push("/historyscreen")}
+              >
+                <View style={styles.iconButtonSmall}>
+                   <MaterialIcons name="history" size={24} color="#fff" />
+                </View>
+                <Text style={styles.buttonLabel}>ประวัติ</Text>
+              </TouchableOpacity>
+
+              {/* Capture Button */}
+              <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                <TouchableOpacity onPress={takePic} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={['#fff', '#e0e0e0']}
+                    style={styles.shutterOuter}
+                  >
+                    <View style={styles.shutterInner} />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+
+              {/* Upload */}
+              <TouchableOpacity 
+                style={styles.sideButton} 
+                onPress={pickAndUploadImage}
+                disabled={isAnalyzing}
+              >
+                <View style={styles.iconButtonSmall}>
+                  {isAnalyzing ? (
+                     <MaterialCommunityIcons name="loading" size={24} color="#fff" />
+                  ) : (
+                     <Ionicons name="images-outline" size={24} color="#fff" />
+                  )}
+                </View>
+                <Text style={styles.buttonLabel}>อัลบั้ม</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.actionControls}>
+              <TouchableOpacity style={styles.retakeBtn} onPress={retakePhoto}>
+                 <Ionicons name="close" size={24} color="#fff" />
+                 <Text style={styles.retakeText}>ถ่ายใหม่</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.analyzeBtn} 
+                onPress={handleAnalysis}
+                disabled={isAnalyzing}
+              >
+                <LinearGradient
+                  colors={isAnalyzing ? ['#7f8c8d', '#95a5a6'] : ['#667eea', '#764ba2']}
+                  style={styles.analyzeGradient}
+                  start={{x: 0, y: 0}} end={{x: 1, y: 0}}
+                >
+                  {isAnalyzing ? (
+                    <Text style={styles.analyzeText}>กำลังวิเคราะห์...</Text>
+                  ) : (
+                    <>
+                      <MaterialIcons name="auto-fix-high" size={20} color="#fff" style={{marginRight: 8}}/>
+                      <Text style={styles.analyzeText}>เริ่มวิเคราะห์</Text>
+                    </>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
-            </Animated.View>
-
-            {/* Gallery Button */}
-            <TouchableOpacity
-              style={styles.controlButton}
-              onPress={pickAndUploadImage}
-              disabled={isAnalyzing}
-            >
-              <LinearGradient
-                colors={isAnalyzing ? ['#ccc', '#aaa'] : ['#FF6B6B', '#FF5252']}
-                style={styles.controlButtonGradient}
-              >
-                {isAnalyzing ? (
-                  <Animated.View style={{ transform: [{ rotate: '360deg' }] }}>
-                    <Ionicons name="refresh" size={24} color="#fff" />
-                  </Animated.View>
-                ) : (
-                  <Octicons name="upload" size={24} color="#fff" />
-                )}
-              </LinearGradient>
-              <Text style={styles.controlButtonText}>
-                {isAnalyzing ? "วิเคราะห์..." : "แกลเลอรี่"}
-              </Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            {/* Analyze Button */}
-            <TouchableOpacity
-              style={[styles.analysisButton, isAnalyzing && styles.analysisButtonDisabled]}
-              onPress={handleAnalysis}
-              disabled={isAnalyzing}
-            >
-              <LinearGradient
-                colors={isAnalyzing ? ['#ccc', '#aaa'] : ['#4CAF50', '#45a049']}
-                style={styles.analysisButtonGradient}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Ionicons name="analytics" size={20} color="#fff" />
-                    <Text style={styles.analysisButtonText}>กำลังวิเคราะห์...</Text>
-                  </>
-                ) : (
-                  <>
-                    <MaterialIcons name="analytics" size={20} color="#fff" />
-                    <Text style={styles.analysisButtonText}>วิเคราะห์รูปภาพ</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* Retake Button */}
-            <TouchableOpacity style={styles.retakeButton} onPress={retakePhoto}>
-              <LinearGradient colors={['#FF6B6B', '#FF5252']} style={styles.retakeButtonGradient}>
-                <MaterialIcons name="refresh" size={24} color="#fff" />
-              </LinearGradient>
-              <Text style={styles.controlButtonText}>ถ่ายใหม่</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </BlurView>
-    </SafeAreaView>
+            </View>
+          )}
+        </BlurView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#000',
   },
-  loadingContainer: {
+  safeArea: {
     flex: 1,
   },
-  loadingGradient: {
+  centerContainer: {
     flex: 1,
+    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '500',
-    marginTop: 16,
+    marginTop: 20,
+    fontSize: 16,
   },
+  
+  // Permission Styles
   permissionContainer: {
     flex: 1,
+    backgroundColor: '#000',
   },
   permissionGradient: {
     flex: 1,
@@ -391,195 +408,232 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   permissionContent: {
+    width: '85%',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 30,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  permissionIcon: {
-    marginBottom: 24,
+  iconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   permissionTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
+    marginBottom: 10,
     textAlign: 'center',
-    marginBottom: 16,
   },
   permissionMessage: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    color: '#ccc',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    marginBottom: 30,
+    lineHeight: 22,
   },
   permissionButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  permissionButtonGradient: {
-    paddingHorizontal: 32,
-    paddingVertical: 12,
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    borderRadius: 30,
+    elevation: 5,
   },
   permissionButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
   },
+
+  // Header Styles (Updated)
   header: {
-    paddingTop: Platform.OS === 'ios' ? 0 : 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 10,
+    paddingBottom: 20,
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    position: 'relative', // เพื่อให้ profileButton อ้างอิงตำแหน่งได้
+  },
+  headerTextContainer: {
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: isSmallScreen ? 20 : 24,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 4,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 5,
+  },
+  
+  // Profile Button Styles (New)
+  profileButton: {
+    position: 'absolute',
+    right: 20, // ชิดขวา
+    top: 15, // ระยะจากด้านบน
+    zIndex: 10,
+  },
+  profileGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20, // วงกลม
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+
+  // Camera Area Styles
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraFrame: {
+    width: CAMERA_SIZE,
+    height: CAMERA_SIZE,
+    borderRadius: 24,
+    padding: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   cameraWrapper: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  cameraContainer: {
-    width: Math.min(width - 40, height * 0.6),
-    aspectRatio: 1,
     borderRadius: 20,
     overflow: 'hidden',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    position: 'relative',
+    backgroundColor: '#000',
   },
   camera: {
     flex: 1,
-    backgroundColor: '#000',
   },
-  gridOverlay: {
+  
+  // Scanning Overlay
+  scanLine: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
+    height: 2,
+    backgroundColor: 'rgba(0,255,150,0.5)',
+    shadowColor: '#00ff96',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    zIndex: 10,
   },
-  gridLine: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  gridLineVertical: {
-    width: 1,
-    height: '100%',
-    left: '33.33%',
-  },
-  focusIndicator: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    width: 80,
-    height: 80,
-    marginTop: -40,
-    marginLeft: -40,
-  },
-  focusCorner: {
+  corner: {
     position: 'absolute',
     width: 20,
     height: 20,
-    borderColor: '#4CAF50',
-    borderWidth: 2,
-    borderTopLeftRadius: 4,
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderColor: '#00ff96',
+    borderWidth: 3,
   },
-  focusCornerTopRight: {
-    top: 0,
-    right: 0,
-    transform: [{ rotate: '90deg' }],
+  tl: { top: 10, left: 10, borderBottomWidth: 0, borderRightWidth: 0, borderTopLeftRadius: 10 },
+  tr: { top: 10, right: 10, borderBottomWidth: 0, borderLeftWidth: 0, borderTopRightRadius: 10 },
+  bl: { bottom: 10, left: 10, borderTopWidth: 0, borderRightWidth: 0, borderBottomLeftRadius: 10 },
+  br: { bottom: 10, right: 10, borderTopWidth: 0, borderLeftWidth: 0, borderBottomRightRadius: 10 },
+
+  // Bottom Controls Styles
+  bottomSheet: {
+    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+    paddingTop: 30,
+    paddingHorizontal: 30,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  focusCornerBottomLeft: {
-    bottom: 0,
-    left: 0,
-    transform: [{ rotate: '-90deg' }],
-  },
-  focusCornerBottomRight: {
-    bottom: 0,
-    right: 0,
-    transform: [{ rotate: '180deg' }],
-  },
-  controls: {
+  controlsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-  },
-  controlButton: {
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  controlButtonGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  sideButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+  },
+  iconButtonSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 6,
   },
-  controlButtonText: {
+  buttonLabel: {
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 12,
-    color: '#333',
-    marginTop: 8,
-    fontWeight: '500',
   },
-  captureButton: {
-    alignItems: 'center',
-  },
-  captureButtonGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  
+  // Shutter Button
+  shutterOuter: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    padding: 4,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
-  analysisButton: {
-    flex: 1,
-    marginRight: 10,
+  shutterInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#ccc',
   },
-  analysisButtonDisabled: {
-    opacity: 0.7,
+
+  // Action Controls (Retake/Analyze)
+  actionControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  analysisButtonGradient: {
+  retakeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 25,
   },
-  analysisButtonText: {
+  retakeText: {
+    color: '#fff',
+    marginLeft: 5,
+    fontWeight: '600',
+  },
+  analyzeBtn: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  analyzeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 25,
+  },
+  analyzeText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  retakeButton: {
-    alignItems: 'center',
-  },
-  retakeButtonGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

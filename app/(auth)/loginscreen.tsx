@@ -88,6 +88,12 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    // *** BYPASS: ข้ามไปหน้า Main Screen ทันทีสำหรับการ Dev ***
+    // หากต้องการกลับมาใช้ระบบ Login ให้ลบบรรทัด router.replace ด้านล่าง และ Uncomment โค้ดส่วนอื่น
+    console.log("Dev Mode: Skipping Login...");
+    router.replace("/mainscreen");
+    return;
+    /*
     try {
       const passwordError = passwordValidator(password.value);
       if (passwordError) {
@@ -118,6 +124,7 @@ export default function LoginScreen() {
       console.error(error);
       Alert.alert("ผิดพลาด", "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
     }
+      */
   };
   
   return (
