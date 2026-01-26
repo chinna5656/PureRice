@@ -1,19 +1,15 @@
-// app/index.tsx
+import { router } from "expo-router";
 import { useEffect } from "react";
-import { useRouter } from "expo-router";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../src/hooks/useAuth";
 
 export default function Index() {
-  const router = useRouter();
-  const { user } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      router.replace("/mainscreen");
-    } else {
-      router.replace("/startscreen");
+    if (!loading) {
+      router.replace(isAuthenticated ? "/(tabs)/mainscreen" : "/(auth)/loginscreen");
     }
-  }, [user]);
+  }, [loading]);
 
   return null;
 }
